@@ -1,4 +1,4 @@
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub enum TokenType {
     // Single-character tokens
     Hash,
@@ -62,7 +62,7 @@ pub enum TokenType {
     NL,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub struct Token {
     /// Token Type
     pub tt: TokenType,
