@@ -1,4 +1,4 @@
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TokenType {
     // Single-character tokens
     Hash,
@@ -52,17 +52,18 @@ pub enum TokenType {
     Super,
 
     // Literals
-    Identifier(String),
-    String(String),
-    Number(f64),
-    Bool(bool),
+    Identifier,
+    String,
+    Number,
+    Bool,
     // End of file
     EOF,
     // New Line
     NL,
 }
 
-#[derive(Debug, PartialEq)]
+/// Represents a "word" in the program
+#[derive(Debug, PartialEq, Eq)]
 pub struct Token {
     /// Token Type
     pub tt: TokenType,
@@ -70,4 +71,6 @@ pub struct Token {
     pub line: usize,
     /// Which column the start of the token is in
     pub column: usize,
+    /// The length of the token
+    pub length: usize,
 }
