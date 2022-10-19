@@ -1,7 +1,6 @@
 #[derive(Debug, PartialEq, Eq)]
 pub enum TokenType {
     // Single-character tokens
-    Hash,
     Dot,
     QuestionMark,
     Plus,
@@ -70,7 +69,7 @@ pub struct Token {
     /// Which line the token is on
     pub line: usize,
     /// Which column the start of the token is in
-    pub column: usize,
+    pub start: usize,
     /// The length of the token
     pub length: usize,
 }

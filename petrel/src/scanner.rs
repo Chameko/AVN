@@ -2,19 +2,17 @@ use crate::error::PetrelError;
 use crate::token::{Token, TokenType};
 use std::fs::File;
 use std::io::Read;
-use std::iter::Peekable;
-
-/// The type for source
-type Source = Peekable<std::vec::IntoIter<char>>;
 
 /// Scanner used to conver the file into a vector of tokens
 pub struct Scanner {
     /// The input for the scanner
-    source: Source,
+    source: Vec<char>,
     /// The line number
     line: usize,
-    /// The column number
-    column: usize,
+    /// The starting index
+    start: usize,
+    /// The length
+    len: usize,
 }
 
 impl Scanner {
@@ -22,11 +20,12 @@ impl Scanner {
     pub fn new(input: String) -> Scanner {
         // Create an iterator of said characters.
         // This is done as chars() references input, which is a function parameter
-        let source = input.chars().collect::<Vec<char>>().into_iter().peekable();
+        let source = input.chars().collect::<Vec<char>>();
         Scanner {
             source,
             line: 1,
-            column: 1,
+            start: 0,
+            len: 0,
         }
     }
 
@@ -39,23 +38,27 @@ impl Scanner {
 
         // Create an iterator of said characters.
         // This is done as chars() references input, which is a funcion parameter
-        let source = input.chars().collect::<Vec<char>>().into_iter().peekable();
+        let source = input.chars().collect::<Vec<char>>();
 
         Ok(Scanner {
             source,
             line: 1,
-            column: 0,
+            start: 0,
+            len: 0,
         })
     }
 
     /// Creates a token
-    fn make_token(&self, tt: TokenType, start: usize) -> Token {
-        Token {
+    #[inline]
+    fn make_token(&mut self, tt: TokenType) -> Token {
+        let t = Token {
             tt,
             line: self.line,
-            column: start,
-            length: self.column - start,
-        }
+            start: self.start,
+            length: self.len,
+        };
+        self.len = 0;
+        t
     }
 
     /// Check if the end of file token has been generated
@@ -69,19 +72,29 @@ impl Scanner {
         )
     }
 
-    /// Move the iterator forward one, consuming the character and returning the next
+    /// Move the start forward one, returning the next character
     #[inline]
-    fn next(&mut self) -> Option<char> {
-        // Done so we don't incrament the column if the next token doesn't exist
-        let next = self.source.next()?;
-        self.column += 1;
-        Some(next)
+    fn next(&mut self) -> Option<&char> {
+        self.start += 1;
+        self.source.get(self.start)
     }
 
-    /// Peek at next char without consuming token
+    /// Advance the index by 1
+    #[inline]
+    fn advance(&mut self) {
+        self.start += 1;
+    }
+
+    /// Peek at next char without consuming the character
     #[inline]
     fn peek(&mut self) -> Option<&char> {
-        self.source.peek()
+        self.source.get(self.start + 1)
+    }
+
+    /// Get the current character
+    #[inline]
+    fn current(&self) -> Option<&char> {
+        self.source.get(self.start)
     }
 
     /// Consume the character and peek at the next
@@ -105,6 +118,39 @@ impl Scanner {
 
     /// Scan a singular token
     pub fn scan_token(&mut self) -> Result<Token, PetrelError> {
-        todo!()
+        // The token is (usually) one character long
+        self.len += 1;
+        if let Some(c) = self.current() {
+            // For convinience
+            use crate::token::TokenType::*;
+            match c {
+                // Single character tokens
+                '.' => Ok(self.make_token(Dot)),
+                '?' => Ok(self.make_token(QuestionMark)),
+                '+' => Ok(self.make_token(Plus)),
+                '-' => Ok(self.make_token(Minus)),
+                '/' => Ok(self.make_token(Slash)),
+                '*' => Ok(self.make_token(Star)),
+                '>' => Ok(self.make_token(Greater)),
+                '<' => Ok(self.make_token(Less)),
+                '!' => Ok(self.make_token(Bang)),
+                '=' => Ok(self.make_token(Equal)),
+                ':' => Ok(self.make_token(Colon)),
+
+                // Various brackets
+                '(' => Ok(self.make_token(LeftParen)),
+                ')' => Ok(self.make_token(RightParen)),
+                '{' => Ok(self.make_token(LeftBrace)),
+                '}' => Ok(self.make_token(RightBrace)),
+                '[' => Ok(self.make_token(LeftBracket)),
+                ']' => Ok(self.make_token(RightBracket)),
+
+                _ => Err(PetrelError::UnknownCharacter(*c)),
+            }
+        } else {
+            // End of file has no length
+            self.len = 0;
+            Ok(self.make_token(TokenType::EOF))
+        }
     }
 }
