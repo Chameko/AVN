@@ -6,4 +6,6 @@ pub enum PetrelError {
     FileNotFound(#[from] std::io::Error),
     #[error("unknown character {0}")]
     UnknownCharacter(char),
+    #[error("missing double quote (\")")]
+    MissingDoubleQuote,
 }

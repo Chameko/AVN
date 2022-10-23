@@ -11,8 +11,6 @@ pub struct Scanner {
     line: usize,
     /// The starting index
     start: usize,
-    /// The length
-    len: usize,
 }
 
 impl Scanner {
@@ -25,7 +23,6 @@ impl Scanner {
             source,
             line: 1,
             start: 0,
-            len: 0,
         }
     }
 
@@ -44,21 +41,47 @@ impl Scanner {
             source,
             line: 1,
             start: 0,
-            len: 0,
         })
+    }
+
+    /// Output the tokens
+    pub fn output(&self, tokens: &Vec<Token>) {
+        for t in tokens {
+            println!(
+                "[{:?} | {}:{}->{}] \"{}\"",
+                t.tt,
+                t.line,
+                t.start,
+                t.start + t.length,
+                self.source
+                    .get(t.start..(t.start + t.length))
+                    .expect("Text out of range")
+                    .iter()
+                    .collect::<String>()
+            )
+        }
     }
 
     /// Creates a token
     #[inline]
-    fn make_token(&mut self, tt: TokenType) -> Token {
-        let t = Token {
+    fn make_token(&self, tt: TokenType, len: usize) -> Token {
+        Token {
             tt,
             line: self.line,
             start: self.start,
-            length: self.len,
-        };
-        self.len = 0;
-        t
+            length: len,
+        }
+    }
+
+    /// Creates a token that we already consumed
+    #[inline]
+    fn make_consumed_token(&self, tt: TokenType, len: usize) -> Token {
+        Token {
+            tt,
+            line: self.line,
+            start: self.start - len + 1,
+            length: len,
+        }
     }
 
     /// Check if the end of file token has been generated
@@ -97,11 +120,158 @@ impl Scanner {
         self.source.get(self.start)
     }
 
-    /// Consume the character and peek at the next
     #[inline]
-    fn consume_and_peek(&mut self) -> Option<&char> {
-        self.next()?;
-        self.peek()
+    fn prev(&self) -> Option<&char> {
+        self.source.get(self.start - 1)
+    }
+
+    /// Create a string literal
+    fn string(&mut self) -> Result<Token, PetrelError> {
+        // Get the next character
+        let mut s = self.next();
+        // Length of string
+        let mut length = 0;
+        while let Some(c) = s {
+            // Test if at end of string
+            if *c == '"' && *self.prev().expect("Unreachable") != '\\' {
+                return Ok(self.make_token(TokenType::String, length));
+            } else {
+                length += 1;
+            }
+            s = self.next();
+        }
+        // If we reach the end of the file, report error
+        Err(PetrelError::MissingDoubleQuote)
+    }
+
+    /// Create a number literal
+    fn number(&mut self) -> Token {
+        let mut s = self.current();
+        let mut length = 1;
+        while let Some(c) = s {
+            if c.is_ascii_digit() {
+                length += 1;
+            } else {
+                break;
+            }
+            s = self.next();
+        }
+        if let Some(c) = s {
+            // Check if its a decimal
+            if *c == '.' {
+                // Continue consuming
+                while let Some(c) = s {
+                    if c.is_ascii_digit() {
+                        length += 1;
+                    } else {
+                        break;
+                    }
+                    s = self.next()
+                }
+                self.make_token(TokenType::Number, length)
+            } else {
+                self.make_token(TokenType::Number, length)
+            }
+        } else {
+            self.make_token(TokenType::Number, length)
+        }
+    }
+
+    /// Skip through a comment
+    fn comment(&mut self) {
+        // Discard until we reach a new line
+        while let Some(c) = self.next() {
+            if *c == '\n' {
+                self.line += 1;
+                break;
+            }
+        }
+        self.advance();
+    }
+
+    /// Create an identifier with a given prefix
+    fn identifier(&mut self, prefix: &str) -> Token {
+        let mut len = prefix.len();
+        while let Some(c) = self.peek() {
+            if c.is_alphanumeric() || *c == '_' {
+                len += 1;
+                self.advance()
+            } else {
+                break;
+            }
+        }
+        self.make_consumed_token(TokenType::Identifier, len)
+    }
+
+    /// Check for keywords or create an identifier
+    fn keyword(&mut self) -> Token {
+        if let Some(c) = self.current() {
+            use crate::token::TokenType::*;
+            match c {
+                'e' => self.check_word("else", 1, Else),
+                'o' => self.check_word("override", 1, Override),
+                'p' => self.check_word("promise", 1, Promise),
+                'r' => self.check_word("return", 1, Return),
+                's' => self.check_word("super", 1, Super),
+                'u' => self.check_word("use", 1, Use),
+                'v' => self.check_word("var", 1, Var),
+                'w' => self.check_word("while", 1, While),
+
+                // Ambiguous keywords
+                'c' => match self.next() {
+                    Some('l') => self.check_word("class", 2, Class),
+                    Some('o') => self.check_word("const", 2, Const),
+                    _ => self.identifier("c"),
+                },
+                'f' => match self.next() {
+                    Some('a') => self.check_word("false", 2, False),
+                    Some('o') => self.check_word("for", 2, For),
+                    Some('r') => self.check_word("from", 2, From),
+                    Some('u') => self.check_word("fun", 2, Fun),
+                    _ => self.identifier("f"),
+                },
+                'i' => match self.next() {
+                    Some('f') => self.check_word("if", 2, If),
+                    Some('n') => self.check_word("in", 2, In),
+                    _ => self.identifier("i"),
+                },
+                _ => self.identifier(&c.to_string()),
+            }
+        } else {
+            self.make_token(TokenType::EOF, 0)
+        }
+    }
+
+    /// Check if a keyword matches up
+    fn check_word(&mut self, to_check: &str, mut length: usize, keyword: TokenType) -> Token {
+        // Check all characters in the keyword
+        for c in to_check.chars().skip(length) {
+            if let Some(l) = self.peek() {
+                if c != *l {
+                    // Not our keyword
+                    return self.identifier(to_check.get(0..length).expect("Unreachable"));
+                } else {
+                    // Continue
+                    length += 1;
+                    self.advance();
+                }
+            } else {
+                // Next character is EOF so make identifier
+                return self.identifier(to_check.get(0..length).expect("Unreachable"));
+            }
+        }
+        // Check for trailing characters
+        if let Some(l) = self.peek() {
+            if l.is_whitespace() {
+                self.make_consumed_token(keyword, length)
+            } else {
+                // Trailing character so identifier
+                self.identifier(to_check)
+            }
+        } else {
+            // EOF next so we make our keyword
+            self.make_consumed_token(keyword, length)
+        }
     }
 
     /// Scan the input into the tokens
@@ -111,6 +281,7 @@ impl Scanner {
 
         while !Self::end_of_file(&tokens) {
             tokens.push(self.scan_token()?);
+            self.advance();
         }
 
         Ok(tokens)
@@ -119,38 +290,81 @@ impl Scanner {
     /// Scan a singular token
     pub fn scan_token(&mut self) -> Result<Token, PetrelError> {
         // The token is (usually) one character long
-        self.len += 1;
         if let Some(c) = self.current() {
             // For convinience
             use crate::token::TokenType::*;
             match c {
                 // Single character tokens
-                '.' => Ok(self.make_token(Dot)),
-                '?' => Ok(self.make_token(QuestionMark)),
-                '+' => Ok(self.make_token(Plus)),
-                '-' => Ok(self.make_token(Minus)),
-                '/' => Ok(self.make_token(Slash)),
-                '*' => Ok(self.make_token(Star)),
-                '>' => Ok(self.make_token(Greater)),
-                '<' => Ok(self.make_token(Less)),
-                '!' => Ok(self.make_token(Bang)),
-                '=' => Ok(self.make_token(Equal)),
-                ':' => Ok(self.make_token(Colon)),
+                '.' => Ok(self.make_token(Dot, 1)),
+                '?' => Ok(self.make_token(QuestionMark, 1)),
+                '+' => Ok(self.make_token(Plus, 1)),
+                '/' => Ok(self.make_token(Slash, 1)),
+                '*' => Ok(self.make_token(Star, 1)),
 
                 // Various brackets
-                '(' => Ok(self.make_token(LeftParen)),
-                ')' => Ok(self.make_token(RightParen)),
-                '{' => Ok(self.make_token(LeftBrace)),
-                '}' => Ok(self.make_token(RightBrace)),
-                '[' => Ok(self.make_token(LeftBracket)),
-                ']' => Ok(self.make_token(RightBracket)),
+                '(' => Ok(self.make_token(LeftParen, 1)),
+                ')' => Ok(self.make_token(RightParen, 1)),
+                '{' => Ok(self.make_token(LeftBrace, 1)),
+                '}' => Ok(self.make_token(RightBrace, 1)),
+                '[' => Ok(self.make_token(LeftBracket, 1)),
+                ']' => Ok(self.make_token(RightBracket, 1)),
 
-                _ => Err(PetrelError::UnknownCharacter(*c)),
+                // Double character tokens
+                '!' => match self.peek() {
+                    Some('=') => Ok(self.make_token(BangEqual, 2)),
+                    _ => Ok(self.make_token(Bang, 1)),
+                },
+                '-' => match self.peek() {
+                    Some('>') => Ok(self.make_token(Arrow, 2)),
+                    _ => Ok(self.make_token(Minus, 1)),
+                },
+                '<' => match self.peek() {
+                    Some('=') => Ok(self.make_token(LessEqual, 2)),
+                    _ => Ok(self.make_token(Less, 1)),
+                },
+                '>' => match self.peek() {
+                    Some('=') => Ok(self.make_token(GreaterEqual, 2)),
+                    _ => Ok(self.make_token(Greater, 1)),
+                },
+                ':' => match self.peek() {
+                    Some(':') => Ok(self.make_token(DoubleColon, 2)),
+                    _ => Ok(self.make_token(Colon, 1)),
+                },
+                '=' => match self.peek() {
+                    Some('=') => Ok(self.make_token(DoubleEqual, 2)),
+                    _ => Ok(self.make_token(Equal, 1)),
+                },
+
+                // Special
+                '"' => self.string(),
+                '#' => {
+                    self.comment();
+                    self.scan_token()
+                }
+                '\n' => {
+                    self.line += 1;
+                    Ok(self.make_token(NL, 1))
+                }
+
+                _ => {
+                    if c.is_ascii_digit() {
+                        Ok(self.number())
+                    } else if c.is_alphabetic() || *c == '_' {
+                        Ok(self.keyword())
+                    } else if c.is_whitespace() {
+                        // Skip whitespace
+                        self.advance();
+                        self.scan_token()
+                    } else {
+                        Err(PetrelError::UnknownCharacter(*c))
+                    }
+                }
             }
         } else {
             // End of file has no length
-            self.len = 0;
-            Ok(self.make_token(TokenType::EOF))
+            Ok(self.make_token(TokenType::EOF, 0))
         }
     }
 }
+
+// TODO write tests
