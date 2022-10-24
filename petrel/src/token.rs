@@ -1,4 +1,6 @@
-#[derive(Debug, PartialEq, Eq)]
+use crate::scanner::Scanner;
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum TokenType {
     // Single-character tokens
     Dot,
@@ -71,4 +73,16 @@ pub struct Token {
     pub start: usize,
     /// The length of the token
     pub length: usize,
+}
+
+impl Token {
+    /// Return the string of text the token represents in the source code
+    pub fn contained_string(&self, scanner: &Scanner) -> String {
+        scanner
+            .source
+            .get(self.start..(self.start + self.length))
+            .expect("Text out of range")
+            .iter()
+            .collect::<String>()
+    }
 }

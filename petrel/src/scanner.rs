@@ -6,7 +6,7 @@ use std::io::Read;
 /// Scanner used to conver the file into a vector of tokens
 pub struct Scanner {
     /// The input for the scanner
-    source: Vec<char>,
+    pub source: Vec<char>,
     /// The line number
     line: usize,
     /// The starting index
@@ -120,25 +120,23 @@ impl Scanner {
         self.source.get(self.start)
     }
 
-    #[inline]
-    fn prev(&self) -> Option<&char> {
-        self.source.get(self.start - 1)
-    }
-
     /// Create a string literal
     fn string(&mut self) -> Result<Token, PetrelError> {
         // Get the next character
-        let mut s = self.next();
+        let mut s = self.peek();
         // Length of string
         let mut length = 0;
         while let Some(c) = s {
             // Test if at end of string
-            if *c == '"' && *self.prev().expect("Unreachable") != '\\' {
-                return Ok(self.make_token(TokenType::String, length));
-            } else {
+            if *c == '\\' {
                 length += 1;
+                self.advance();
+            } else if *c == '"' {
+                return Ok(self.make_consumed_token(TokenType::String, length));
             }
-            s = self.next();
+            length += 1;
+            self.advance();
+            s = self.peek();
         }
         // If we reach the end of the file, report error
         Err(PetrelError::MissingDoubleQuote)
@@ -146,7 +144,7 @@ impl Scanner {
 
     /// Create a number literal
     fn number(&mut self) -> Token {
-        let mut s = self.current();
+        let mut s = self.peek();
         let mut length = 1;
         while let Some(c) = s {
             if c.is_ascii_digit() {
@@ -154,26 +152,32 @@ impl Scanner {
             } else {
                 break;
             }
-            s = self.next();
+            self.advance();
+            s = self.peek();
         }
         if let Some(c) = s {
             // Check if its a decimal
             if *c == '.' {
                 // Continue consuming
+                // Skip over dot
+                length += 1;
+                self.advance();
+                s = self.peek();
                 while let Some(c) = s {
                     if c.is_ascii_digit() {
                         length += 1;
                     } else {
                         break;
                     }
-                    s = self.next()
+                    self.advance();
+                    s = self.peek()
                 }
-                self.make_token(TokenType::Number, length)
+                self.make_consumed_token(TokenType::Number, length)
             } else {
-                self.make_token(TokenType::Number, length)
+                self.make_consumed_token(TokenType::Number, length)
             }
         } else {
-            self.make_token(TokenType::Number, length)
+            self.make_consumed_token(TokenType::Number, length)
         }
     }
 
@@ -280,7 +284,8 @@ impl Scanner {
         let mut tokens: Vec<Token> = vec![];
 
         while !Self::end_of_file(&tokens) {
-            tokens.push(self.scan_token()?);
+            let t = self.scan_token()?;
+            tokens.push(t);
             self.advance();
         }
 
@@ -336,7 +341,12 @@ impl Scanner {
                 },
 
                 // Special
-                '"' => self.string(),
+                '"' => {
+                    let tk = self.string();
+                    // Go past remaining quote
+                    self.advance();
+                    tk
+                }
                 '#' => {
                     self.comment();
                     self.scan_token()
@@ -368,3 +378,73 @@ impl Scanner {
 }
 
 // TODO write tests
+#[cfg(test)]
+mod test {
+    use super::*;
+    /// Test some simple example function code
+    #[test]
+    fn function() {
+        let mut scanner =
+            Scanner::from_file("./scripts/tests/function.ptrl").expect("Failed to create scanner");
+        let tks = scanner.scan().expect("Scanning failed");
+        use crate::token::TokenType as TT;
+        let correct = vec![
+            (TT::Fun, "fun"),
+            (TT::Identifier, "helloWorld"),
+            (TT::LeftParen, "("),
+            (TT::Identifier, "name"),
+            (TT::RightParen, ")"),
+            (TT::LeftBrace, "{"),
+            (TT::NL, "\n"),
+            (TT::Identifier, "doSomething"),
+            (TT::LeftParen, "("),
+            (TT::RightParen, ")"),
+            (TT::NL, "\n"),
+            (TT::RightBrace, "}"),
+            (TT::EOF, ""),
+        ];
+        type TokenTest = Vec<(TokenType, String)>;
+        let correct = correct.iter().map(|e| (e.0, e.1.to_string()));
+        let tks: TokenTest = tks
+            .into_iter()
+            .map(|t| (t.tt, t.contained_string(&scanner)))
+            .collect();
+        for test_case in correct.into_iter().zip(tks) {
+            assert_eq!(test_case.0, test_case.1);
+        }
+    }
+
+    /// Test literal passing such as strings and numbers
+    #[test]
+    fn literals() {
+        let mut scanner =
+            Scanner::from_file("./scripts/tests/literal.ptrl").expect("Failed to create scanner");
+        let tks = scanner.scan().expect("Scanning failed");
+        use crate::token::TokenType as TT;
+        let correct = vec![
+            (TT::String, "A quick brown fox jumped over the lazy dog"),
+            (TT::NL, "\n"),
+            (TT::Number, "134"),
+            (TT::NL, "\n"),
+            (TT::Number, "12.3242"),
+            (TT::NL, "\n"),
+            (TT::Number, "12.5"),
+            (TT::Dot, "."),
+            (TT::Number, "1"),
+            (TT::NL, "\n"),
+            (TT::String, "escape \\\""),
+            (TT::NL, "\n"),
+            (TT::String, "new line O_o\nwow\n"),
+            (TT::EOF, ""),
+        ];
+        type TokenTest = Vec<(TokenType, String)>;
+        let correct = correct.iter().map(|e| (e.0, e.1.to_string()));
+        let tks: TokenTest = tks
+            .into_iter()
+            .map(|t| (t.tt, t.contained_string(&scanner)))
+            .collect();
+        for test_case in correct.into_iter().zip(tks) {
+            assert_eq!(test_case.0, test_case.1);
+        }
+    }
+}
