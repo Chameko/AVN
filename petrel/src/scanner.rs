@@ -285,6 +285,7 @@ impl Scanner {
 
         while !Self::end_of_file(&tokens) {
             let t = self.scan_token()?;
+
             tokens.push(t);
             self.advance();
         }
@@ -379,7 +380,7 @@ impl Scanner {
 
 // TODO write tests
 #[cfg(test)]
-mod test {
+mod scanner_test {
     use super::*;
     /// Test some simple example function code
     #[test]
