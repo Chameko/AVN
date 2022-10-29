@@ -1,7 +1,8 @@
-use crate::debug::dissasemble_instruction;
-use crate::error::PetrelError;
-use crate::value::Value;
+use crate::common::value::Value;
+use crate::diagnostic::debug::dissasemble_instruction;
+use crate::diagnostic::{PetrelError, VMError};
 
+#[derive(Debug)]
 #[repr(u8)]
 pub enum Opcode {
     OpReturn,
@@ -14,7 +15,7 @@ pub enum Opcode {
 }
 
 impl TryFrom<u8> for Opcode {
-    type Error = PetrelError;
+    type Error = VMError;
     fn try_from(src: u8) -> Result<Self, Self::Error> {
         match src {
             0 => Ok(Opcode::OpReturn),
@@ -24,7 +25,7 @@ impl TryFrom<u8> for Opcode {
             4 => Ok(Opcode::OpSubtract),
             5 => Ok(Opcode::OpMultiply),
             6 => Ok(Opcode::OpDivide),
-            _ => Err(PetrelError::NoPotentialOpcode),
+            _ => Err(VMError::InvalidOpcodeConversion(src)),
         }
     }
 }
@@ -49,13 +50,13 @@ pub struct VM {
     pub ip: usize,
 }
 
-/// Macro for simplifying basic binary operations
+/// Macro for creating basic binary operations
 macro_rules! binary_op {
     ($s:tt, $v:ident) => {
         {
-            let a = $v.stack.pop().ok_or(PetrelError::EmptyStack)?;
-            let b = $v.stack.pop().ok_or(PetrelError::EmptyStack)?;
-            $v.stack.push(a $s b);
+            let a = $v.stack.pop().ok_or(VMError::EmptyStack)?;
+            let b = $v.stack.pop().ok_or(VMError::EmptyStack)?;
+            $v.stack.push(b $s a);
         }
     };
 }
@@ -77,10 +78,7 @@ impl VM {
                     println!("{:>10}[ {:?} ]", " ", val);
                 }
             }
-            let instruction = self
-                .instructions
-                .get(self.ip)
-                .ok_or(PetrelError::InterpretError)?;
+            let instruction = self.instructions.get(self.ip).ok_or(VMError::NoReturn)?;
             dissasemble_instruction(self, self.ip);
             use Opcode::*;
             match Opcode::try_from(instruction.opcode)? {
@@ -91,7 +89,7 @@ impl VM {
                 OpDivide => binary_op!(/, self),
                 OpNegate => {
                     #[allow(clippy::unnecessary_lazy_evaluations)]
-                    let val = self.stack.pop().ok_or_else(|| PetrelError::EmptyStack)?;
+                    let val = self.stack.pop().ok_or_else(|| VMError::EmptyStack)?;
                     self.stack.push(-val);
                 }
                 OpConstant => {
@@ -142,11 +140,15 @@ mod vm_test {
         let mut vm = VM::new();
         let a = vm.write_constant(2.5);
         let b = vm.write_constant(7.5);
+        let c = vm.write_constant(2.0);
         vm.write_operation(Opcode::OpConstant.into(), 123, 0, 0);
         vm.write_operation(a, 123, 0, 0);
         vm.write_operation(Opcode::OpConstant.into(), 123, 0, 0);
         vm.write_operation(b, 123, 0, 0);
         vm.write_operation(Opcode::OpAdd.into(), 123, 0, 0);
+        vm.write_operation(Opcode::OpConstant.into(), 123, 0, 0);
+        vm.write_operation(c, 123, 0, 0);
+        vm.write_operation(Opcode::OpDivide.into(), 123, 0, 0);
         vm.write_operation(Opcode::OpReturn.into(), 123, 0, 0);
         vm.run(true).unwrap();
     }

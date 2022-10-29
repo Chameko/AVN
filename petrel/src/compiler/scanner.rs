@@ -1,5 +1,5 @@
-use crate::error::PetrelError;
-use crate::token::{Token, TokenType};
+use crate::compiler::token::{Token, TokenType};
+use crate::diagnostic::PetrelError;
 use std::fs::File;
 use std::io::Read;
 
@@ -210,7 +210,7 @@ impl Scanner {
     /// Check for keywords or create an identifier
     fn keyword(&mut self) -> Token {
         if let Some(c) = self.current() {
-            use crate::token::TokenType::*;
+            use super::TokenType::*;
             match c {
                 'e' => self.check_word("else", 1, Else),
                 'o' => self.check_word("override", 1, Override),
@@ -298,7 +298,7 @@ impl Scanner {
         // The token is (usually) one character long
         if let Some(c) = self.current() {
             // For convinience
-            use crate::token::TokenType::*;
+            use super::TokenType::*;
             match c {
                 // Single character tokens
                 '.' => Ok(self.make_token(Dot, 1)),
@@ -388,7 +388,7 @@ mod scanner_test {
         let mut scanner =
             Scanner::from_file("./scripts/tests/function.ptrl").expect("Failed to create scanner");
         let tks = scanner.scan().expect("Scanning failed");
-        use crate::token::TokenType as TT;
+        use super::TokenType as TT;
         let correct = vec![
             (TT::Fun, "fun"),
             (TT::Identifier, "helloWorld"),
@@ -421,7 +421,7 @@ mod scanner_test {
         let mut scanner =
             Scanner::from_file("./scripts/tests/literal.ptrl").expect("Failed to create scanner");
         let tks = scanner.scan().expect("Scanning failed");
-        use crate::token::TokenType as TT;
+        use super::TokenType as TT;
         let correct = vec![
             (TT::String, "A quick brown fox jumped over the lazy dog"),
             (TT::NL, "\n"),

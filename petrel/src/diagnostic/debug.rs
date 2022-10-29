@@ -1,4 +1,4 @@
-use crate::vm::{Opcode, VM};
+use crate::runtime::vm::{Opcode, VM};
 
 pub fn dissasemble_instruction(vm: &VM, offset: usize) {
     print!("{:04} ", offset);
@@ -9,7 +9,7 @@ pub fn dissasemble_instruction(vm: &VM, offset: usize) {
     }
 
     let instruction = vm.instructions[offset].opcode;
-    use crate::vm::Opcode::*;
+    use crate::runtime::vm::Opcode::*;
     match Opcode::try_from(instruction) {
         Ok(OpReturn) => println!(" Return"),
         Ok(OpConstant) => println!(

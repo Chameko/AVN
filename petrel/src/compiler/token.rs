@@ -1,4 +1,4 @@
-use crate::scanner::Scanner;
+use super::Scanner;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum TokenType {
@@ -62,8 +62,8 @@ pub enum TokenType {
     NL,
 }
 
-/// Represents a "word" in the program
-#[derive(Debug, PartialEq, Eq)]
+/// Represents a "word" in the program. Should be cheap to copy but I want to be explicit about when I'm copying
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Token {
     /// Token Type
     pub tt: TokenType,

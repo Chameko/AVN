@@ -1,6 +1,4 @@
-pub mod debug;
-pub mod error;
-pub mod scanner;
-pub mod token;
-pub mod value;
-pub mod vm;
+pub mod common;
+pub mod compiler;
+pub mod diagnostic;
+pub mod runtime;
