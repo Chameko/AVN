@@ -4,12 +4,14 @@ use std::ptr::NonNull;
 pub type BlockPtr = NonNull<u8>;
 pub type BlockSize = usize;
 
+/// Represents a block of memory
 pub struct Block {
     ptr: BlockPtr,
     size: BlockSize,
 }
 
 impl Block {
+    /// Create a new block
     pub fn new(size: BlockSize) -> Result<Block, BlockError> {
         if !size.is_power_of_two() {
             return Err(BlockError::BadRequest);
@@ -41,6 +43,7 @@ mod internal {
         ptr::NonNull,
     };
 
+    /// Allocate a block of size
     pub fn alloc_block(size: BlockSize) -> Result<BlockPtr, BlockError> {
         unsafe {
             let layout = Layout::from_size_align_unchecked(size, size);
@@ -54,6 +57,7 @@ mod internal {
         }
     }
 
+    /// Dealocate the block
     pub fn dealloc_block(ptr: BlockPtr, size: BlockSize) {
         unsafe {
             let layout = Layout::from_size_align_unchecked(size, size);
