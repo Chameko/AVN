@@ -22,7 +22,11 @@ pub fn dissasemble_instruction(vm: &VM, offset: usize) {
         Ok(OpSubtract) => println!(" Subtract"),
         Ok(OpMultiply) => println!(" Multiply"),
         Ok(OpDivide) => println!(" Divide"),
-        _ => println!("Unsupported bytecode D:"),
+        Ok(OpTrue) => println!(" True"),
+        Ok(OpFalse) => println!(" False"),
+        Ok(OpNull) => println!(" Null"),
+        Ok(OpNot) => println!(" Not"),
+        Err(e) => panic!("{}", e),
     }
 }
 

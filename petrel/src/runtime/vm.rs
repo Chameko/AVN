@@ -1,6 +1,6 @@
 use crate::common::value::Value;
 use crate::diagnostic::debug::dissasemble_instruction;
-use crate::diagnostic::{PetrelError, VMError};
+use crate::diagnostic::{Context, PetrelError, VMError};
 
 #[derive(Debug)]
 #[repr(u8)]
@@ -12,6 +12,10 @@ pub enum Opcode {
     OpSubtract,
     OpMultiply,
     OpDivide,
+    OpNull,
+    OpTrue,
+    OpFalse,
+    OpNot,
 }
 
 impl TryFrom<u8> for Opcode {
@@ -36,13 +40,13 @@ impl From<Opcode> for u8 {
     }
 }
 
+#[derive(Debug)]
 pub struct Operation {
     pub opcode: u8,
     pub line: usize,
-    pub start: usize,
-    pub length: usize,
 }
 
+#[derive(Debug)]
 pub struct VM {
     pub instructions: Vec<Operation>,
     pub constants: Vec<Value>,
@@ -52,11 +56,21 @@ pub struct VM {
 
 /// Macro for creating basic binary operations
 macro_rules! binary_op {
-    ($s:tt, $v:ident) => {
+    ($s:tt, $v:ident, $i:ident) => {
         {
-            let a = $v.stack.pop().ok_or(VMError::EmptyStack)?;
-            let b = $v.stack.pop().ok_or(VMError::EmptyStack)?;
-            $v.stack.push(b $s a);
+            if let Value::Number(_) = $v.peek(0)? {
+                if let Value::Number(_) = $v.peek(1)? {
+                    // Pop off the values
+                    if let Value::Number(an) = $v.pop()? {
+                        if let Value::Number(bn) = $v.pop()? {
+                            // Push on the result
+                            $v.stack.push(Value::Number(bn $s an));
+                        }
+                    }
+                } else {
+                    Err(VMError::Runtime(VM::create_context(&$i, "Operands must be numbers")))?;
+                }
+            }
         }
     };
 }
@@ -83,19 +97,50 @@ impl VM {
             use Opcode::*;
             match Opcode::try_from(instruction.opcode)? {
                 OpReturn => break,
-                OpAdd => binary_op!(+, self),
-                OpSubtract => binary_op!(-, self),
-                OpMultiply => binary_op!(*, self),
-                OpDivide => binary_op!(/, self),
+                OpAdd => binary_op!(+, self, instruction),
+                OpSubtract => binary_op!(-, self, instruction),
+                OpMultiply => binary_op!(*, self, instruction),
+                OpDivide => binary_op!(/, self, instruction),
                 OpNegate => {
-                    #[allow(clippy::unnecessary_lazy_evaluations)]
-                    let val = self.stack.pop().ok_or_else(|| VMError::EmptyStack)?;
-                    self.stack.push(-val);
+                    if let Value::Number(_) = self.peek(0)? {
+                        // Actually pop the value off the stack
+                        if let Value::Number(n) = self.pop()? {
+                            // Add the negated value to the stack
+                            self.stack.push(Value::Number(-n));
+                        }
+                    } else {
+                        // Error out
+                        Err(VMError::Runtime(Self::create_context(
+                            instruction,
+                            "Attempted to negate a non number",
+                        )))?;
+                    }
                 }
                 OpConstant => {
-                    let val = self.constants[self.instructions[self.ip + 1].opcode as usize];
+                    let val =
+                        self.constants[self.instructions[self.ip + 1].opcode as usize].clone();
                     self.stack.push(val);
                     self.ip += 1;
+                }
+                OpNull => self.stack.push(Value::Null),
+                OpTrue => self.stack.push(Value::Bool(true)),
+                OpFalse => self.stack.push(Value::Bool(false)),
+                OpNot => {
+                    // Check if it is a bool
+                    match self.peek(0)? {
+                        Value::Bool(_) => {
+                            // Use logical not
+                            if let Value::Bool(b) = self.pop()? {
+                                self.stack.push(Value::Bool(!b));
+                            }
+                        }
+                        // !null == null so we do nothing
+                        Value::Null => {}
+                        _ => Err(VMError::Runtime(Self::create_context(
+                            instruction,
+                            "Attempted to use logical not on a non boolean",
+                        )))?,
+                    }
                 }
             }
             self.ip += 1;
@@ -103,18 +148,33 @@ impl VM {
         Ok(())
     }
 
+    /// Peek at the opcode distance from the top of the stack. Use 0 for top
+    fn peek(&self, distance: usize) -> Result<&Value, PetrelError> {
+        #[allow(clippy::unnecessary_lazy_evaluations)]
+        let v = self
+            .stack
+            .get(self.stack.len() - 1 - distance)
+            .ok_or_else(|| VMError::EmptyStack)?;
+        Ok(v)
+    }
+
+    fn pop(&mut self) -> Result<Value, PetrelError> {
+        #[allow(clippy::unnecessary_lazy_evaluations)]
+        let v = self.stack.pop().ok_or_else(|| VMError::EmptyStack)?;
+        Ok(v)
+    }
+
+    fn create_context(ins: &Operation, message: &str) -> Context {
+        Context::new("Unknown".to_string(), ins.line, message.to_string())
+    }
+
     pub fn write_constant(&mut self, constant: Value) -> u8 {
         self.constants.push(constant);
         (self.constants.len() - 1) as u8
     }
 
-    pub fn write_operation(&mut self, code: u8, line: usize, start: usize, len: usize) {
-        let op = Operation {
-            opcode: code,
-            length: len,
-            start,
-            line,
-        };
+    pub fn write_operation(&mut self, code: u8, line: usize) {
+        let op = Operation { opcode: code, line };
         self.instructions.push(op);
     }
 }
@@ -138,18 +198,18 @@ mod vm_test {
     #[test]
     fn basic_arithmatic() {
         let mut vm = VM::new();
-        let a = vm.write_constant(2.5);
-        let b = vm.write_constant(7.5);
-        let c = vm.write_constant(2.0);
-        vm.write_operation(Opcode::OpConstant.into(), 123, 0, 0);
-        vm.write_operation(a, 123, 0, 0);
-        vm.write_operation(Opcode::OpConstant.into(), 123, 0, 0);
-        vm.write_operation(b, 123, 0, 0);
-        vm.write_operation(Opcode::OpAdd.into(), 123, 0, 0);
-        vm.write_operation(Opcode::OpConstant.into(), 123, 0, 0);
-        vm.write_operation(c, 123, 0, 0);
-        vm.write_operation(Opcode::OpDivide.into(), 123, 0, 0);
-        vm.write_operation(Opcode::OpReturn.into(), 123, 0, 0);
+        let a = vm.write_constant(Value::Number(2.5));
+        let b = vm.write_constant(Value::Number(7.5));
+        let c = vm.write_constant(Value::Number(2.0));
+        vm.write_operation(Opcode::OpConstant.into(), 123);
+        vm.write_operation(a, 123);
+        vm.write_operation(Opcode::OpConstant.into(), 123);
+        vm.write_operation(b, 123);
+        vm.write_operation(Opcode::OpAdd.into(), 123);
+        vm.write_operation(Opcode::OpConstant.into(), 123);
+        vm.write_operation(c, 123);
+        vm.write_operation(Opcode::OpDivide.into(), 123);
+        vm.write_operation(Opcode::OpReturn.into(), 123);
         vm.run(true).unwrap();
     }
 }

@@ -1,3 +1,7 @@
+use crate::compiler::compiler::Compiler;
+use crate::compiler::compiler::ParseRule;
+use crate::compiler::compiler::Precedence;
+
 use super::Scanner;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -14,6 +18,7 @@ pub enum TokenType {
     Bang,
     Equal,
     Colon,
+    Comma,
 
     // Brackets -> []
     LeftBracket,
@@ -34,7 +39,6 @@ pub enum TokenType {
     BangEqual,
 
     // Keywords
-    Class,
     Const,
     Else,
     False,
@@ -42,11 +46,14 @@ pub enum TokenType {
     From,
     Fun,
     If,
+    Impl,
     In,
-    Override,
-    Promise,
+    Null,
     Return,
+    Struct,
     Super,
+    This,
+    Trait,
     True,
     Use,
     Var,
@@ -60,6 +67,66 @@ pub enum TokenType {
     EOF,
     // New Line
     NL,
+}
+
+impl TokenType {
+    /// Get the parser rule for the token
+    pub fn get_rule(&self) -> ParseRule {
+        use TokenType::*;
+        match self {
+            LeftParen => ParseRule {
+                prefix: Some(Compiler::grouping),
+                infix: None,
+                precedence: Precedence::None,
+            },
+            Minus => ParseRule {
+                prefix: Some(Compiler::unary),
+                infix: Some(Compiler::binary),
+                precedence: Precedence::Term,
+            },
+            Plus => ParseRule {
+                prefix: None,
+                infix: Some(Compiler::binary),
+                precedence: Precedence::Term,
+            },
+            Slash => ParseRule {
+                prefix: None,
+                infix: Some(Compiler::binary),
+                precedence: Precedence::Factor,
+            },
+            Star => ParseRule {
+                prefix: None,
+                infix: Some(Compiler::binary),
+                precedence: Precedence::Factor,
+            },
+            Number => ParseRule {
+                prefix: Some(Compiler::number),
+                infix: None,
+                precedence: Precedence::None,
+            },
+            False => ParseRule {
+                prefix: Some(Compiler::literal),
+                infix: None,
+                precedence: Precedence::None,
+            },
+            True => ParseRule {
+                prefix: Some(Compiler::literal),
+                infix: None,
+                precedence: Precedence::None,
+            },
+            Null => ParseRule {
+                prefix: Some(Compiler::literal),
+                infix: None,
+                precedence: Precedence::None,
+            },
+            Bang => ParseRule {
+                prefix: Some(Compiler::unary),
+                infix: None,
+                precedence: Precedence::None,
+            },
+            _ => ParseRule::default(),
+        }
+    }
 }
 
 /// Represents a "word" in the program. Should be cheap to copy but I want to be explicit about when I'm copying

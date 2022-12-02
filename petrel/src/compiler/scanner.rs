@@ -73,13 +73,14 @@ impl Scanner {
         }
     }
 
-    /// Creates a token that we already consumed
+    /// Creates a token that we already consumed. It should be called when scanner is on
+    /// the last character of token.
     #[inline]
     fn make_consumed_token(&self, tt: TokenType, len: usize) -> Token {
         Token {
             tt,
             line: self.line,
-            start: self.start - len + 1,
+            start: self.start - (len - 1),
             length: len,
         }
     }
@@ -122,20 +123,25 @@ impl Scanner {
 
     /// Create a string literal
     fn string(&mut self) -> Result<Token, PetrelError> {
-        // Get the next character
+        // Get the first character of the string
         let mut s = self.peek();
         // Length of string
         let mut length = 0;
         while let Some(c) = s {
-            // Test if at end of string
+            // Test for escape
             if *c == '\\' {
+                // Skip past the \
                 length += 1;
                 self.advance();
             } else if *c == '"' {
+                // end of string
                 return Ok(self.make_consumed_token(TokenType::String, length));
             }
+            // Increase length
             length += 1;
+            // Move forward
             self.advance();
+            // Peek at next character
             s = self.peek();
         }
         // If we reach the end of the file, report error
@@ -144,33 +150,40 @@ impl Scanner {
 
     /// Create a number literal
     fn number(&mut self) -> Token {
+        // Get next character as we know the current one is valid
         let mut s = self.peek();
         let mut length = 1;
         while let Some(c) = s {
+            // If its a digit
             if c.is_ascii_digit() {
+                // Add to the length
                 length += 1;
+                // Move forward
+                self.advance();
+                // To the next one
+                s = self.peek();
             } else {
+                // Its either a . or the end of the number
                 break;
             }
-            self.advance();
-            s = self.peek();
         }
+
         if let Some(c) = s {
             // Check if its a decimal
             if *c == '.' {
-                // Continue consuming
                 // Skip over dot
                 length += 1;
                 self.advance();
                 s = self.peek();
+
                 while let Some(c) = s {
                     if c.is_ascii_digit() {
                         length += 1;
+                        self.advance();
+                        s = self.peek()
                     } else {
                         break;
                     }
-                    self.advance();
-                    s = self.peek()
                 }
                 self.make_consumed_token(TokenType::Number, length)
             } else {
@@ -213,19 +226,18 @@ impl Scanner {
             use super::TokenType::*;
             match c {
                 'e' => self.check_word("else", 1, Else),
-                'o' => self.check_word("override", 1, Override),
-                'p' => self.check_word("promise", 1, Promise),
                 'r' => self.check_word("return", 1, Return),
-                's' => self.check_word("super", 1, Super),
                 'u' => self.check_word("use", 1, Use),
                 'v' => self.check_word("var", 1, Var),
                 'w' => self.check_word("while", 1, While),
+                'c' => self.check_word("const", 1, Const),
+                'n' => self.check_word("null", 1, Null),
 
                 // Ambiguous keywords
-                'c' => match self.next() {
-                    Some('l') => self.check_word("class", 2, Class),
-                    Some('o') => self.check_word("const", 2, Const),
-                    _ => self.identifier("c"),
+                's' => match self.next() {
+                    Some('u') => self.check_word("super", 2, Super),
+                    Some('e') => self.check_word("struct", 2, Struct),
+                    _ => self.identifier("s"),
                 },
                 'f' => match self.next() {
                     Some('a') => self.check_word("false", 2, False),
@@ -237,7 +249,17 @@ impl Scanner {
                 'i' => match self.next() {
                     Some('f') => self.check_word("if", 2, If),
                     Some('n') => self.check_word("in", 2, In),
+                    Some('m') => self.check_word("impl", 2, Impl),
                     _ => self.identifier("i"),
+                },
+                't' => match self.next() {
+                    Some('h') => self.check_word("this", 2, This),
+                    Some('r') => match self.next() {
+                        Some('u') => self.check_word("true", 3, True),
+                        Some('a') => self.check_word("trait", 3, Trait),
+                        _ => self.identifier("tr"),
+                    },
+                    _ => self.identifier("t"),
                 },
                 _ => self.identifier(&c.to_string()),
             }
@@ -306,6 +328,7 @@ impl Scanner {
                 '+' => Ok(self.make_token(Plus, 1)),
                 '/' => Ok(self.make_token(Slash, 1)),
                 '*' => Ok(self.make_token(Star, 1)),
+                ',' => Ok(self.make_token(Comma, 1)),
 
                 // Various brackets
                 '(' => Ok(self.make_token(LeftParen, 1)),
@@ -343,6 +366,7 @@ impl Scanner {
 
                 // Special
                 '"' => {
+                    // Push past the first quote
                     let tk = self.string();
                     // Go past remaining quote
                     self.advance();
@@ -378,7 +402,6 @@ impl Scanner {
     }
 }
 
-// TODO write tests
 #[cfg(test)]
 mod scanner_test {
     use super::*;
