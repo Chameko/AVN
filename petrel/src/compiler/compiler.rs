@@ -2,6 +2,8 @@ use crate::common::{Opcode, Token, TokenType, Value};
 use crate::diagnostic::{Annotation, PetrelError};
 use crate::runtime::VM;
 
+use super::Source;
+
 /// The operator precidence
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Precedence {
@@ -65,8 +67,8 @@ impl Default for ParseRule {
 /// or when it can't convert a string to a literal
 #[derive(Debug)]
 pub struct Compiler {
-    /// The source as a list of lines
-    pub source: String,
+    /// The source
+    pub source: Source,
     /// Tokens :)
     pub tokens: Vec<Token>,
     /// Index
@@ -80,10 +82,9 @@ pub struct Compiler {
 }
 
 impl Compiler {
-    pub fn new(source: String, tokens: Vec<Token>) -> Self {
-        let src = source.lines().map(|s| s.to_string()).collect();
+    pub fn new(source: Source, tokens: Vec<Token>) -> Self {
         Self {
-            source: src,
+            source,
             tokens,
             index: 0,
             vm: VM::new(),
@@ -156,6 +157,7 @@ impl Compiler {
             message,
             token.clone(),
             self.source
+                .src
                 .lines()
                 .nth(token.line - 1)
                 .expect("Invalid line")
@@ -187,11 +189,12 @@ impl Compiler {
     /// convert the string into the number. The reason is if we cannot do this then our compiler
     /// is broken :( and we cannot really "recover"
     pub(crate) fn number(&mut self) -> Result<(), PetrelError> {
-        let previous_start = self.previous().start;
-        let previous_length = self.previous().length;
+        let previous_start = self.previous().span.start;
+        let previous_end = self.previous().span.end;
         let value = self
             .source
-            .get(previous_start..(previous_start + previous_length))
+            .src
+            .get(previous_start..previous_end)
             .expect("token should reference valid number");
         self.add_constant(Value::Number(
             value.parse().expect("string should represent valid number"),
@@ -311,25 +314,27 @@ impl Compiler {
 
 #[cfg(test)]
 mod compiler_test {
+    use crate::compiler::Source;
+
     use super::super::Scanner;
     use super::Compiler;
 
     #[test]
     fn basic_arithmatic() {
-        let mut scanner = Scanner::from_file("./scripts/tests/arithmatic.ptrl")
-            .expect("Failed to create scanner");
+        let src = Source::from_file("./scripts/tests/arithmatic.ptrl").unwrap();
+        let mut scanner = Scanner::new(&src);
         let tks = scanner.scan().expect("Scanning failed");
-        let mut compiler = Compiler::new(scanner.source.iter().collect(), tks);
+        let mut compiler = Compiler::new(src, tks);
         compiler.compile().run(true).expect("VM failed to run");
     }
 
     #[test]
     #[should_panic]
     fn syntax_error() {
-        let mut scanner = Scanner::from_file("./scripts/tests/syntax_error.ptrl")
-            .expect("Failed to create scanner");
+        let src = Source::from_file("./scripts/tests/syntax_error.ptrl").unwrap();
+        let mut scanner = Scanner::new(&src);
         let tks = scanner.scan().expect("Scanning failed");
-        let mut compiler = Compiler::new(scanner.source.iter().collect(), tks);
+        let mut compiler = Compiler::new(src, tks);
         compiler.compile();
     }
 }

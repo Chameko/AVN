@@ -3,6 +3,9 @@ use crate::diagnostic::PetrelError;
 use std::fs::File;
 use std::io::Read;
 
+use super::source::Span;
+use super::Source;
+
 /// Scanner used to conver the file into a vector of tokens
 pub struct Scanner {
     /// The input for the scanner
@@ -14,18 +17,6 @@ pub struct Scanner {
 }
 
 impl Scanner {
-    /// Create a new scanner from string
-    pub fn new(input: String) -> Scanner {
-        // Create an iterator of said characters.
-        // This is done as chars() references input, which is a function parameter
-        let source = input.chars().collect::<Vec<char>>();
-        Scanner {
-            source,
-            line: 1,
-            start: 0,
-        }
-    }
-
     /// Read from file
     pub fn from_file(path: &str) -> Result<Scanner, PetrelError> {
         // Read file
@@ -34,7 +25,7 @@ impl Scanner {
         file.read_to_string(&mut input)?;
 
         // Create an iterator of said characters.
-        // This is done as chars() references input, which is a funcion parameter
+        // This is done as chars() references input, which is a local variable
         let source = input.chars().collect::<Vec<char>>();
 
         Ok(Scanner {
@@ -44,6 +35,15 @@ impl Scanner {
         })
     }
 
+    /// Create a new scanner from source
+    pub fn new(src: &Source) -> Self {
+        Self {
+            source: src.src.chars().collect::<Vec<char>>(),
+            line: 1,
+            start: 0,
+        }
+    }
+
     /// Output the tokens
     pub fn output(&self, tokens: &Vec<Token>) {
         for t in tokens {
@@ -51,10 +51,10 @@ impl Scanner {
                 "[{:?} | {}:{}->{}] \"{}\"",
                 t.tt,
                 t.line,
-                t.start,
-                t.start + t.length,
+                t.span.start,
+                t.span.end,
                 self.source
-                    .get(t.start..(t.start + t.length))
+                    .get(t.span.start..t.span.end)
                     .expect("Text out of range")
                     .iter()
                     .collect::<String>()
@@ -68,8 +68,7 @@ impl Scanner {
         Token {
             tt,
             line: self.line,
-            start: self.start,
-            length: len,
+            span: Span::new(self.start, len),
         }
     }
 
@@ -80,8 +79,7 @@ impl Scanner {
         Token {
             tt,
             line: self.line,
-            start: self.start - (len - 1),
-            length: len,
+            span: Span::new(self.start - (len - 1), len),
         }
     }
 
@@ -408,8 +406,8 @@ mod scanner_test {
     /// Test some simple example function code
     #[test]
     fn function() {
-        let mut scanner =
-            Scanner::from_file("./scripts/tests/function.ptrl").expect("Failed to create scanner");
+        let src = Source::from_file("./scripts/tests/function.ptrl").unwrap();
+        let mut scanner = Scanner::new(&src);
         let tks = scanner.scan().expect("Scanning failed");
         use super::TokenType as TT;
         let correct = vec![
@@ -431,7 +429,7 @@ mod scanner_test {
         let correct = correct.iter().map(|e| (e.0, e.1.to_string()));
         let tks: TokenTest = tks
             .into_iter()
-            .map(|t| (t.tt, t.contained_string(&scanner)))
+            .map(|t| (t.tt, t.contained_string(&src).to_string()))
             .collect();
         for test_case in correct.into_iter().zip(tks) {
             assert_eq!(test_case.0, test_case.1);
@@ -441,8 +439,8 @@ mod scanner_test {
     /// Test literal passing such as strings and numbers
     #[test]
     fn literals() {
-        let mut scanner =
-            Scanner::from_file("./scripts/tests/literal.ptrl").expect("Failed to create scanner");
+        let src = Source::from_file("./scripts/tests/literal.ptrl").unwrap();
+        let mut scanner = Scanner::new(&src);
         let tks = scanner.scan().expect("Scanning failed");
         use super::TokenType as TT;
         let correct = vec![
@@ -465,7 +463,7 @@ mod scanner_test {
         let correct = correct.iter().map(|e| (e.0, e.1.to_string()));
         let tks: TokenTest = tks
             .into_iter()
-            .map(|t| (t.tt, t.contained_string(&scanner)))
+            .map(|t| (t.tt, t.contained_string(&src).to_string()))
             .collect();
         for test_case in correct.into_iter().zip(tks) {
             assert_eq!(test_case.0, test_case.1);

@@ -1,5 +1,6 @@
 use crate::compiler::compiler::{ParseRule, Precedence};
-use crate::compiler::{Compiler, Scanner};
+use crate::compiler::source::Span;
+use crate::compiler::{Compiler, Source};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum TokenType {
@@ -214,20 +215,19 @@ pub struct Token {
     pub tt: TokenType,
     /// Which line the token is on
     pub line: usize,
-    /// Which column the start of the token is in
-    pub start: usize,
-    /// The length of the token
-    pub length: usize,
+    /// The part of source that the token is from
+    pub span: Span,
 }
 
 impl Token {
     /// Return the string of text the token represents in the source code
-    pub fn contained_string(&self, scanner: &Scanner) -> String {
-        scanner
-            .source
-            .get(self.start..(self.start + self.length))
-            .expect("Text out of range")
-            .iter()
-            .collect::<String>()
+    pub fn contained_string<'a>(&self, source: &'a Source) -> &'a str {
+        source
+            .slice(&self.span)
+            .expect("Token should point to valid string from source")
+    }
+
+    pub fn length(&self) -> usize {
+        self.span.end - self.span.start
     }
 }

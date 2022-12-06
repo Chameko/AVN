@@ -97,8 +97,8 @@ impl Annotation {
         let l5 = format!(
             " {:<3} | {}{}\n",
             "",
-            " ".repeat(self.token.start),
-            "^".repeat(self.token.length)
+            " ".repeat(self.token.span.start),
+            "^".repeat(self.token.length())
         );
         l1 + &l2 + l3 + &l4 + &l5
     }
