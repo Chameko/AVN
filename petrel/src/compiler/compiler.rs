@@ -1,7 +1,6 @@
-use super::{Token, TokenType};
-use crate::common::Value;
+use crate::common::{Opcode, Token, TokenType, Value};
 use crate::diagnostic::{Annotation, PetrelError};
-use crate::runtime::vm::{Opcode, VM};
+use crate::runtime::VM;
 
 /// The operator precidence
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -152,9 +151,9 @@ impl Compiler {
     }
 
     /// Used to create an annotation for error reporting
-    fn create_annotation(&self, token: &Token) -> Annotation {
+    fn create_annotation(&self, token: &Token, message: String) -> Annotation {
         Annotation::new(
-            "Expected expression".to_string(),
+            message,
             token.clone(),
             self.source
                 .lines()
@@ -175,7 +174,8 @@ impl Compiler {
             self.advance();
             Ok(())
         } else {
-            let a = self.create_annotation(current);
+            let a =
+                self.create_annotation(current, format!("Expected {}, found {}", tt, current.tt));
             self.report_error(PetrelError::SyntaxError(a))
         }
     }
@@ -254,6 +254,12 @@ impl Compiler {
             TokenType::Minus => self.add_instruction(Opcode::OpSubtract),
             TokenType::Star => self.add_instruction(Opcode::OpMultiply),
             TokenType::Slash => self.add_instruction(Opcode::OpDivide),
+            TokenType::BangEqual => self.add_instruction(Opcode::OpNotEqual),
+            TokenType::DoubleEqual => self.add_instruction(Opcode::OpEqual),
+            TokenType::Greater => self.add_instruction(Opcode::OpGreater),
+            TokenType::Less => self.add_instruction(Opcode::OpLess),
+            TokenType::GreaterEqual => self.add_instruction(Opcode::OpGreaterThanOrEqual),
+            TokenType::LessEqual => self.add_instruction(Opcode::OpLessThanOrEqual),
             _ => panic!("Unsupported binary operation"),
         }
         Ok(())
@@ -266,7 +272,7 @@ impl Compiler {
             prefix_rule(self)?;
         } else {
             self.report_error(PetrelError::SyntaxError(
-                self.create_annotation(self.previous()),
+                self.create_annotation(self.previous(), "Expected expression".to_string()),
             ))?;
         }
 

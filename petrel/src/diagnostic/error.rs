@@ -1,10 +1,8 @@
 use std::fmt::{Debug, Display};
 
-use crate::compiler::token::Token;
+use crate::common::{Opcode, Token};
 use colored::*;
 use thiserror::Error;
-
-use crate::runtime::vm::Opcode;
 
 /// The overarching error type for petrel
 #[derive(Error, Debug)]

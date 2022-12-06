@@ -1,4 +1,5 @@
-use crate::runtime::vm::{Opcode, VM};
+use crate::common::Opcode;
+use crate::runtime::VM;
 
 pub fn dissasemble_instruction(vm: &VM, offset: usize) {
     print!("{:04} ", offset);
@@ -9,7 +10,7 @@ pub fn dissasemble_instruction(vm: &VM, offset: usize) {
     }
 
     let instruction = vm.instructions[offset].opcode;
-    use crate::runtime::vm::Opcode::*;
+    use crate::common::Opcode::*;
     match Opcode::try_from(instruction) {
         Ok(OpReturn) => println!(" Return"),
         Ok(OpConstant) => println!(
@@ -26,6 +27,12 @@ pub fn dissasemble_instruction(vm: &VM, offset: usize) {
         Ok(OpFalse) => println!(" False"),
         Ok(OpNull) => println!(" Null"),
         Ok(OpNot) => println!(" Not"),
+        Ok(OpGreater) => println!(" Greater"),
+        Ok(OpLess) => println!(" Less"),
+        Ok(OpGreaterThanOrEqual) => println!(" Greater than or Equal"),
+        Ok(OpLessThanOrEqual) => println!(" Less than or Equal"),
+        Ok(OpNotEqual) => println!(" Not Equal"),
+        Ok(OpEqual) => println!(" Equal"),
         Err(e) => panic!("{}", e),
     }
 }

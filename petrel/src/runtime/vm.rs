@@ -1,44 +1,7 @@
-use crate::common::value::Value;
+use crate::common::{Opcode, Value};
 use crate::diagnostic::debug::dissasemble_instruction;
 use crate::diagnostic::{Context, PetrelError, VMError};
-
-#[derive(Debug)]
-#[repr(u8)]
-pub enum Opcode {
-    OpReturn,
-    OpConstant,
-    OpNegate,
-    OpAdd,
-    OpSubtract,
-    OpMultiply,
-    OpDivide,
-    OpNull,
-    OpTrue,
-    OpFalse,
-    OpNot,
-}
-
-impl TryFrom<u8> for Opcode {
-    type Error = VMError;
-    fn try_from(src: u8) -> Result<Self, Self::Error> {
-        match src {
-            0 => Ok(Opcode::OpReturn),
-            1 => Ok(Opcode::OpConstant),
-            2 => Ok(Opcode::OpNegate),
-            3 => Ok(Opcode::OpAdd),
-            4 => Ok(Opcode::OpSubtract),
-            5 => Ok(Opcode::OpMultiply),
-            6 => Ok(Opcode::OpDivide),
-            _ => Err(VMError::InvalidOpcodeConversion(src)),
-        }
-    }
-}
-
-impl From<Opcode> for u8 {
-    fn from(code: Opcode) -> Self {
-        code as u8
-    }
-}
+use crate::runtime::operations::values_equal;
 
 #[derive(Debug)]
 pub struct Operation {
@@ -56,7 +19,7 @@ pub struct VM {
 
 /// Macro for creating basic binary operations
 macro_rules! binary_op {
-    ($s:tt, $v:ident, $i:ident) => {
+    ($s:tt, $v:ident, $i:ident, $var: ident) => {
         {
             if let Value::Number(_) = $v.peek(0)? {
                 if let Value::Number(_) = $v.peek(1)? {
@@ -64,12 +27,14 @@ macro_rules! binary_op {
                     if let Value::Number(an) = $v.pop()? {
                         if let Value::Number(bn) = $v.pop()? {
                             // Push on the result
-                            $v.stack.push(Value::Number(bn $s an));
+                            $v.stack.push(Value::$var(bn $s an));
                         }
                     }
                 } else {
                     Err(VMError::Runtime(VM::create_context(&$i, "Operands must be numbers")))?;
                 }
+            } else {
+                Err(VMError::Runtime(VM::create_context(&$i, "Operands must be numbers")))?;
             }
         }
     };
@@ -94,13 +59,13 @@ impl VM {
             }
             let instruction = self.instructions.get(self.ip).ok_or(VMError::NoReturn)?;
             dissasemble_instruction(self, self.ip);
-            use Opcode::*;
+            use crate::common::Opcode::*;
             match Opcode::try_from(instruction.opcode)? {
                 OpReturn => break,
-                OpAdd => binary_op!(+, self, instruction),
-                OpSubtract => binary_op!(-, self, instruction),
-                OpMultiply => binary_op!(*, self, instruction),
-                OpDivide => binary_op!(/, self, instruction),
+                OpAdd => binary_op!(+, self, instruction, Number),
+                OpSubtract => binary_op!(-, self, instruction, Number),
+                OpMultiply => binary_op!(*, self, instruction, Number),
+                OpDivide => binary_op!(/, self, instruction, Number),
                 OpNegate => {
                     if let Value::Number(_) = self.peek(0)? {
                         // Actually pop the value off the stack
@@ -141,6 +106,20 @@ impl VM {
                             "Attempted to use logical not on a non boolean",
                         )))?,
                     }
+                }
+                OpEqual => {
+                    let a = self.pop()?;
+                    let b = self.pop()?;
+                    self.stack.push(Value::Bool(values_equal(a, b)));
+                }
+                OpGreater => binary_op!(>, self, instruction, Bool),
+                OpGreaterThanOrEqual => binary_op!(>=, self, instruction, Bool),
+                OpLess => binary_op!(<, self, instruction, Bool),
+                OpLessThanOrEqual => binary_op!(<=, self, instruction, Bool),
+                OpNotEqual => {
+                    let a = self.pop()?;
+                    let b = self.pop()?;
+                    self.stack.push(Value::Bool(!values_equal(a, b)));
                 }
             }
             self.ip += 1;

@@ -1,8 +1,5 @@
-use crate::compiler::compiler::Compiler;
-use crate::compiler::compiler::ParseRule;
-use crate::compiler::compiler::Precedence;
-
-use super::Scanner;
+use crate::compiler::compiler::{ParseRule, Precedence};
+use crate::compiler::{Compiler, Scanner};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum TokenType {
@@ -69,6 +66,62 @@ pub enum TokenType {
     NL,
 }
 
+impl std::fmt::Display for TokenType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use TokenType::*;
+        match self {
+            Dot => write!(f, "."),
+            QuestionMark => write!(f, "?"),
+            Plus => write!(f, "+"),
+            Minus => write!(f, "-"),
+            Star => write!(f, "*"),
+            Slash => write!(f, "/"),
+            Greater => write!(f, ">"),
+            Less => write!(f, "<"),
+            Bang => write!(f, "!"),
+            Equal => write!(f, "="),
+            Comma => write!(f, ","),
+            Colon => write!(f, ":"),
+            LeftBracket => write!(f, "["),
+            RightBracket => write!(f, "]"),
+            LeftBrace => write!(f, "{{"),
+            RightBrace => write!(f, "}}"),
+            LeftParen => write!(f, "("),
+            RightParen => write!(f, ")"),
+            Arrow => write!(f, "=>"),
+            GreaterEqual => write!(f, ">="),
+            LessEqual => write!(f, "<="),
+            DoubleEqual => write!(f, "=="),
+            DoubleColon => write!(f, "::"),
+            BangEqual => write!(f, "!="),
+            Const => write!(f, "const"),
+            Else => write!(f, "else"),
+            False => write!(f, "false"),
+            For => write!(f, "for"),
+            From => write!(f, "from"),
+            Fun => write!(f, "fun"),
+            If => write!(f, "if"),
+            Impl => write!(f, "impl"),
+            In => write!(f, "in"),
+            Null => write!(f, "null"),
+            Return => write!(f, "return"),
+            Struct => write!(f, "struct"),
+            Super => write!(f, "super"),
+            This => write!(f, "this"),
+            Trait => write!(f, "trait"),
+            True => write!(f, "true"),
+            Use => write!(f, "use"),
+            Var => write!(f, "var"),
+            While => write!(f, "while"),
+            Identifier => write!(f, "identifier"),
+            String => write!(f, "string"),
+            Number => write!(f, "number"),
+            EOF => write!(f, "end of file"),
+            NL => write!(f, "new line"),
+        }
+    }
+}
+
 impl TokenType {
     /// Get the parser rule for the token
     pub fn get_rule(&self) -> ParseRule {
@@ -123,6 +176,31 @@ impl TokenType {
                 prefix: Some(Compiler::unary),
                 infix: None,
                 precedence: Precedence::None,
+            },
+            BangEqual => ParseRule {
+                prefix: None,
+                infix: Some(Compiler::binary),
+                precedence: Precedence::Equality,
+            },
+            DoubleEqual => ParseRule {
+                prefix: None,
+                infix: Some(Compiler::binary),
+                precedence: Precedence::Equality,
+            },
+            Greater => ParseRule {
+                prefix: None,
+                infix: Some(Compiler::binary),
+                precedence: Precedence::Comparison,
+            },
+            GreaterEqual => ParseRule {
+                prefix: None,
+                infix: Some(Compiler::binary),
+                precedence: Precedence::Comparison,
+            },
+            Less => ParseRule {
+                prefix: None,
+                infix: Some(Compiler::binary),
+                precedence: Precedence::Comparison,
             },
             _ => ParseRule::default(),
         }

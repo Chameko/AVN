@@ -1,4 +1,4 @@
-use crate::compiler::token::{Token, TokenType};
+use crate::common::{Token, TokenType};
 use crate::diagnostic::PetrelError;
 use std::fs::File;
 use std::io::Read;
@@ -223,7 +223,7 @@ impl Scanner {
     /// Check for keywords or create an identifier
     fn keyword(&mut self) -> Token {
         if let Some(c) = self.current() {
-            use super::TokenType::*;
+            use crate::common::TokenType::*;
             match c {
                 'e' => self.check_word("else", 1, Else),
                 'r' => self.check_word("return", 1, Return),
@@ -320,7 +320,7 @@ impl Scanner {
         // The token is (usually) one character long
         if let Some(c) = self.current() {
             // For convinience
-            use super::TokenType::*;
+            use crate::common::TokenType::*;
             match c {
                 // Single character tokens
                 '.' => Ok(self.make_token(Dot, 1)),
