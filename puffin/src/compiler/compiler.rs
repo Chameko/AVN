@@ -321,7 +321,7 @@ mod compiler_test {
 
     #[test]
     fn basic_arithmatic() {
-        let src = Source::from_file("./scripts/tests/arithmatic.ptrl").unwrap();
+        let src = Source::from_file("./scripts/tests/arithmatic.puf").unwrap();
         let mut scanner = Scanner::new(&src);
         let tks = scanner.scan().expect("Scanning failed");
         let mut compiler = Compiler::new(src, tks);
@@ -331,7 +331,7 @@ mod compiler_test {
     #[test]
     #[should_panic]
     fn syntax_error() {
-        let src = Source::from_file("./scripts/tests/syntax_error.ptrl").unwrap();
+        let src = Source::from_file("./scripts/tests/syntax_error.puf").unwrap();
         let mut scanner = Scanner::new(&src);
         let tks = scanner.scan().expect("Scanning failed");
         let mut compiler = Compiler::new(src, tks);
